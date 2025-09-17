@@ -92,6 +92,17 @@ For selectors, use EXACTLY what's provided in the page context:
 - Use the provided class selectors (e.g., .className)
 - Use the text-based selectors for buttons/links (e.g., button:has-text("Submit"))
 
+VALID ACTION TYPES (use ONLY these):
+- "navigate" - Navigate to a URL (value should be the URL)
+- "click" - Click an element (selector required)
+- "type" - Type text into an input (selector and value required)
+- "wait" - Wait for an element to be visible (selector required)
+- "screenshot" - Take a screenshot (optional value for filename)
+- "select" - Select an option from dropdown (selector and value required)
+- "hover" - Hover over an element (selector required)
+- "scroll" - Scroll the page (optional value for amount)
+- "assert" - Make an assertion (for assertions only)
+
 Always include proper wait conditions and error handling steps.
 
 {format_instructions}"""
@@ -123,8 +134,34 @@ If a needed element is not in the page context, mention it in the description bu
         steps = []
         for step_data in output.steps:
             try:
-                # Validate action type
-                action = step_data.get("action", "click")
+                # Validate and normalize action type
+                action = step_data.get("action", "click").lower()
+
+                # Handle common variations
+                action_mapping = {
+                    "navigate to": "navigate",
+                    "navigate to the url": "navigate",
+                    "go to": "navigate",
+                    "fill": "type",
+                    "enter": "type",
+                    "input": "type",
+                    "press": "click",
+                    "tap": "click",
+                    "wait for": "wait",
+                    "take screenshot": "screenshot",
+                    "capture": "screenshot",
+                    "choose": "select",
+                    "pick": "select",
+                    "scroll to": "scroll"
+                }
+
+                # Check if it's a known variation
+                for variation, normalized in action_mapping.items():
+                    if variation in action.lower():
+                        action = normalized
+                        break
+
+                # Final validation
                 if action not in [e.value for e in ActionType]:
                     logger.warning(f"Unknown action type: {action}, defaulting to click")
                     action = "click"

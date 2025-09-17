@@ -1,9 +1,8 @@
 """Page Analyzer - Extracts page structure and selectors for test planning."""
 
-import asyncio
 import json
 from typing import Dict, List, Any, Optional
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -160,10 +159,13 @@ class PageAnalyzer:
 
             try:
                 # Navigate to the page
-                await page.goto(url, wait_until="networkidle", timeout=30000)
+                # Use domcontentloaded instead of networkidle to avoid timeout on slow sites
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-                # Wait for content to load
+                # Wait for content to load (give it a moment to render)
                 await page.wait_for_load_state("domcontentloaded")
+                # Wait a bit for dynamic content
+                await page.wait_for_timeout(2000)
 
                 # Execute analysis script
                 analysis_data = await page.evaluate(self.page_script)
@@ -193,11 +195,47 @@ class PageAnalyzer:
 
             except Exception as e:
                 logger.error(f"Failed to analyze page: {e}")
-                # Return minimal analysis on error
+                # Return minimal analysis on error with basic structure
                 return PageAnalysis(
                     url=url,
-                    title="Analysis Failed",
-                    page_structure=str(e)
+                    title="Page Analysis Failed - Using Fallback",
+                    page_structure=json.dumps({
+                        "error": str(e),
+                        "fallback": True,
+                        "note": "Analysis failed, using generic selectors"
+                    }, indent=2),
+                    buttons=[
+                        PageElement(
+                            tag="button",
+                            text="Generic Submit Button",
+                            selector="button[type='submit']",
+                            is_interactive=True
+                        )
+                    ],
+                    inputs=[
+                        PageElement(
+                            tag="input",
+                            type="text",
+                            selector="input[type='text']",
+                            placeholder="Generic text input",
+                            is_interactive=True
+                        ),
+                        PageElement(
+                            tag="input",
+                            type="password",
+                            selector="input[type='password']",
+                            placeholder="Generic password input",
+                            is_interactive=True
+                        )
+                    ],
+                    links=[
+                        PageElement(
+                            tag="a",
+                            text="Generic Link",
+                            selector="a",
+                            is_interactive=True
+                        )
+                    ]
                 )
             finally:
                 await context.close()

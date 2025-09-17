@@ -1,0 +1,183 @@
+{
+  "login_test": {
+    "name": "Login Flow Test",
+    "description": "Test user login with valid credentials",
+    "steps": [
+      {
+        "action": "navigate",
+        "value": "{{url}}/login",
+        "description": "Navigate to login page"
+      },
+      {
+        "action": "type",
+        "selector": "[data-testid='email-input']",
+        "value": "{{email}}",
+        "description": "Enter email address"
+      },
+      {
+        "action": "type",
+        "selector": "[data-testid='password-input']",
+        "value": "{{password}}",
+        "description": "Enter password"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='login-button']",
+        "description": "Click login button"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "url",
+        "expected": "{{url}}/dashboard",
+        "description": "Verify redirect to dashboard"
+      },
+      {
+        "type": "visible",
+        "selector": "[data-testid='user-profile']",
+        "description": "Verify user profile is visible"
+      }
+    ]
+  },
+  "checkout_test": {
+    "name": "E-commerce Checkout Test",
+    "description": "Test complete checkout flow",
+    "steps": [
+      {
+        "action": "navigate",
+        "value": "{{url}}/products",
+        "description": "Navigate to products page"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='product-card']:first-child",
+        "description": "Click first product"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='add-to-cart']",
+        "description": "Add product to cart"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='cart-icon']",
+        "description": "Open cart"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='checkout-button']",
+        "description": "Proceed to checkout"
+      },
+      {
+        "action": "type",
+        "selector": "[data-testid='shipping-address']",
+        "value": "123 Test Street",
+        "description": "Enter shipping address"
+      },
+      {
+        "action": "type",
+        "selector": "[data-testid='card-number']",
+        "value": "4111111111111111",
+        "description": "Enter card number"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='place-order']",
+        "description": "Place order"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "visible",
+        "selector": "[data-testid='order-confirmation']",
+        "description": "Verify order confirmation is shown"
+      },
+      {
+        "type": "text",
+        "selector": "[data-testid='order-status']",
+        "expected": "Order Placed Successfully",
+        "description": "Verify success message"
+      }
+    ]
+  },
+  "search_test": {
+    "name": "Search Functionality Test",
+    "description": "Test search feature with various queries",
+    "steps": [
+      {
+        "action": "navigate",
+        "value": "{{url}}",
+        "description": "Navigate to homepage"
+      },
+      {
+        "action": "type",
+        "selector": "[data-testid='search-input']",
+        "value": "{{search_query}}",
+        "description": "Enter search query"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='search-button']",
+        "description": "Click search button"
+      },
+      {
+        "action": "wait",
+        "selector": "[data-testid='search-results']",
+        "description": "Wait for search results"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "visible",
+        "selector": "[data-testid='search-results']",
+        "description": "Verify search results are displayed"
+      },
+      {
+        "type": "count",
+        "selector": "[data-testid='result-item']",
+        "expected": 10,
+        "description": "Verify at least 10 results"
+      }
+    ]
+  },
+  "form_validation_test": {
+    "name": "Form Validation Test",
+    "description": "Test form validation rules",
+    "steps": [
+      {
+        "action": "navigate",
+        "value": "{{url}}/register",
+        "description": "Navigate to registration form"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='submit-button']",
+        "description": "Try to submit empty form"
+      },
+      {
+        "action": "type",
+        "selector": "[data-testid='email-input']",
+        "value": "invalid-email",
+        "description": "Enter invalid email"
+      },
+      {
+        "action": "click",
+        "selector": "[data-testid='submit-button']",
+        "description": "Try to submit with invalid email"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "visible",
+        "selector": "[data-testid='email-error']",
+        "description": "Verify email error message"
+      },
+      {
+        "type": "text",
+        "selector": "[data-testid='email-error']",
+        "expected": "Please enter a valid email",
+        "description": "Verify error message text"
+      }
+    ]
+  }
+}

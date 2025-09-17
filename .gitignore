@@ -205,6 +205,7 @@ dump.rdb
 
 # Claude artifacts
 .claude/
+.claude
 
 # API keys and secrets
 *.key

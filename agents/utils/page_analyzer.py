@@ -2,7 +2,10 @@
 
 import json
 from typing import Dict, List, Any, Optional
-from playwright.async_api import async_playwright
+from playwright.async_api import (
+    async_playwright,
+    TimeoutError as PlaywrightTimeoutError,
+)
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -153,14 +156,18 @@ class PageAnalyzer:
             browser = await p.chromium.launch(headless=headless)
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 720},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+                locale="en-US",
+                ignore_https_errors=True,
+                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             )
             page = await context.new_page()
+            page.set_default_timeout(60000)
+            page.set_default_navigation_timeout(90000)
 
             try:
-                # Navigate to the page
-                # Use domcontentloaded instead of networkidle to avoid timeout on slow sites
-                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                # Navigate to the page with robust retries and alternative wait strategies
+                await self._navigate_with_retries(page, url)
 
                 # Wait for content to load (give it a moment to render)
                 await page.wait_for_load_state("domcontentloaded")
@@ -178,16 +185,16 @@ class PageAnalyzer:
                     buttons=[PageElement(**btn) for btn in analysis_data["buttons"]],
                     links=[PageElement(**link) for link in analysis_data["links"]],
                     inputs=[PageElement(**inp) for inp in analysis_data["inputs"]],
-                    navigation=[PageElement(**nav) for nav in analysis_data["navigation"]],
+                    navigation=[
+                        PageElement(**nav) for nav in analysis_data["navigation"]
+                    ],
                     page_structure=analysis_data["page_structure"],
-                    meta_description=analysis_data.get("meta_description")
+                    meta_description=analysis_data.get("meta_description"),
                 )
 
                 # Add interactive elements
                 analysis.interactive_elements = (
-                    analysis.buttons[:10] +
-                    analysis.inputs[:10] +
-                    analysis.links[:5]
+                    analysis.buttons[:10] + analysis.inputs[:10] + analysis.links[:5]
                 )
 
                 logger.success(f"Page analysis complete: {url}")
@@ -199,17 +206,20 @@ class PageAnalyzer:
                 return PageAnalysis(
                     url=url,
                     title="Page Analysis Failed - Using Fallback",
-                    page_structure=json.dumps({
-                        "error": str(e),
-                        "fallback": True,
-                        "note": "Analysis failed, using generic selectors"
-                    }, indent=2),
+                    page_structure=json.dumps(
+                        {
+                            "error": str(e),
+                            "fallback": True,
+                            "note": "Analysis failed, using generic selectors",
+                        },
+                        indent=2,
+                    ),
                     buttons=[
                         PageElement(
                             tag="button",
                             text="Generic Submit Button",
                             selector="button[type='submit']",
-                            is_interactive=True
+                            is_interactive=True,
                         )
                     ],
                     inputs=[
@@ -218,28 +228,60 @@ class PageAnalyzer:
                             type="text",
                             selector="input[type='text']",
                             placeholder="Generic text input",
-                            is_interactive=True
+                            is_interactive=True,
                         ),
                         PageElement(
                             tag="input",
                             type="password",
                             selector="input[type='password']",
                             placeholder="Generic password input",
-                            is_interactive=True
-                        )
+                            is_interactive=True,
+                        ),
                     ],
                     links=[
                         PageElement(
                             tag="a",
                             text="Generic Link",
                             selector="a",
-                            is_interactive=True
+                            is_interactive=True,
                         )
-                    ]
+                    ],
                 )
             finally:
                 await context.close()
                 await browser.close()
+
+    async def _navigate_with_retries(self, page, url: str) -> None:
+        """Navigate with multiple strategies to reduce flakiness/timeouts.
+
+        Tries a sequence of wait strategies with increasing leniency.
+        Raises the last error if all attempts fail.
+        """
+
+        attempts = [
+            {"wait_until": "domcontentloaded", "timeout": 60000},
+            {"wait_until": "commit", "timeout": 90000},
+            {"wait_until": "load", "timeout": 120000},
+        ]
+
+        last_error: Optional[Exception] = None
+        for attempt in attempts:
+            try:
+                await page.goto(url, **attempt)
+                return
+            except PlaywrightTimeoutError as e:
+                logger.warning(
+                    f"Navigation timed out with wait_until='{attempt['wait_until']}', retrying..."
+                )
+                last_error = e
+            except Exception as e:
+                logger.warning(
+                    f"Navigation failed with wait_until='{attempt['wait_until']}': {e}. Retrying..."
+                )
+                last_error = e
+
+        if last_error:
+            raise last_error
 
     def format_for_prompt(self, analysis: PageAnalysis) -> str:
         """Format page analysis for LLM prompt."""
@@ -247,7 +289,7 @@ class PageAnalyzer:
         prompt_parts = [
             f"Page URL: {analysis.url}",
             f"Page Title: {analysis.title}",
-            ""
+            "",
         ]
 
         if analysis.meta_description:
@@ -274,7 +316,9 @@ class PageAnalyzer:
                 if form.get("buttons"):
                     prompt_parts.append("  Submit buttons:")
                     for btn in form["buttons"][:2]:
-                        prompt_parts.append(f"    - {btn.get('text', 'Submit')} -> {btn['selector']}")
+                        prompt_parts.append(
+                            f"    - {btn.get('text', 'Submit')} -> {btn['selector']}"
+                        )
 
         # Add key interactive elements
         if analysis.buttons:
